@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue';
+import ImagePanel from './components/ImagePanel.vue';
 import PlaceSlot from './components/PlaceSlot.vue';
 import { loadPlaces, savePlaces } from './lib/storage';
 
@@ -31,5 +32,7 @@ const idsOutside = (index) => places.value.filter((place, i) => place && i !== i
                 @remove="setPlace(index, null)"
             />
         </section>
+
+        <ImagePanel :places="places" />
     </main>
 </template>
