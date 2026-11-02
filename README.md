@@ -1,59 +1,62 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Four places, one picture
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A small weather dashboard: add four places, see the current weather in each, and turn it into one AI image whose prompt is built in code from the weather data.
 
-## About Laravel
+Laravel 12 (PHP) for the API, Vue 3 on Vite for the page, Open-Meteo for weather, Gemini for the image.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Run it from a fresh clone
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Needs PHP 8.2+, Composer and Node 20+.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+git clone <this repo> weather-dashboard-ai
+cd weather-dashboard-ai
+composer install
+npm install
+npm run build
+cp .env.example .env
+php artisan key:generate
+```
 
-## Learning Laravel
+Put your Gemini API key in `.env` (`GEMINI_API_KEY=...`), then:
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+```bash
+php artisan serve --no-reload
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Open http://127.0.0.1:8000. No database or migration is needed. Tests: `php artisan test`.
 
-## Laravel Sponsors
+`--no-reload` lets `php artisan serve` start the 4 workers set in `.env` (`PHP_CLI_SERVER_WORKERS`), so the weather cards keep loading while an image is being generated. On Windows PHP's built-in server has a single worker, so requests wait for the image to finish.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## APIs and why
 
-### Premium Partners
+- **Weather: [Open-Meteo](https://open-meteo.com).** No key, and the geocoding answer has region, country and population, which is what you need to tell the Springfields apart. The forecast call returns the time zone and UTC offset, so the local time comes from the same answer, and units are set in the request (°C, km/h).
+- **Image: Gemini, `gemini-3.1-flash-image` by default.** One `generateContent` call returns the image inline, it accepts an aspect ratio (16:9 for four panels side by side), and I already use the Gemini API in other projects. Google's docs use more than one name for the same image model, so if the configured name answers 404 the app tries `gemini-3.1-flash-image-preview` and then `gemini-2.5-flash-image`. Set `GEMINI_IMAGE_MODEL` in `.env` to pick another one. Image models are not on Gemini's free tier, so the key needs billing.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## How it fits together
 
-## Contributing
+- `app/Weather/OpenMeteo.php`: place search and current weather. Every number on the page and in the prompt comes from here. Weather is cached for 10 minutes.
+- `app/Images/ImagePrompt.php`: builds the prompt from the weather data in plain code. No language model writes it.
+- `app/Images/GeminiImage.php`: calls Gemini and turns every failure into a message for the user.
+- `POST /api/image` fetches the weather again on the server instead of trusting numbers from the browser, and returns the prompt even when the image fails.
+- The four places live in `localStorage`, so they survive a reload without accounts.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Failures: a place that doesn't exist, the weather API being down, a missing or rejected key, quota, a timeout (60 s, `GEMINI_TIMEOUT`), a refused prompt or an answer without an image all show a message where they happen, and the rest of the page keeps working. They are covered in `tests/Feature`.
 
-## Code of Conduct
+## What doesn't work yet
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- The image request is one long HTTP call (up to a minute). With one more day I would move it to a queued job and let the page poll, so it doesn't depend on server workers or proxy timeouts.
+- Images aren't saved: a reload loses the last image, and every click costs a generation.
+- The search results can't be moved through with the arrow keys yet.
+- There are PHP tests for the API and the prompt, but no browser test for the page.
 
-## Security Vulnerabilities
+## How I used AI
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+I built this with Claude Code (Claude Opus 5.5). I gave it the task text and my choices: Laravel and Vue because they're my main stack, Open-Meteo, and Gemini for the image. It wrote the code and the tests in small steps, one commit per step, as the history shows. Before writing the tests it checked the real Open-Meteo answers, for example that a search with no match has no `results` key at all.
 
-## License
+What changed or got thrown away on the way:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- Laravel's default database sessions, cache and queue went: files and `sync` are enough here, and a fresh clone runs without a migration.
+- Setting `PHP_CLI_SERVER_WORKERS` alone did nothing: `php artisan serve` only uses it with `--no-reload`, which is why the run command has that flag.
+- The image model name: Google's docs show more than one name for the same model, so instead of guessing one the app tries a short list on 404.
+- Axios and the welcome page from the skeleton were removed: the page uses `fetch`, wrapped so a failing call returns a message instead of throwing.
