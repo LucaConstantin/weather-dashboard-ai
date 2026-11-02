@@ -35,4 +35,19 @@ return [
         ],
     ],
 
+    'open_meteo' => [
+        'geocoding_url' => 'https://geocoding-api.open-meteo.com/v1/search',
+        'forecast_url' => 'https://api.open-meteo.com/v1/forecast',
+        'timeout' => 8,
+    ],
+
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        'base_url' => 'https://generativelanguage.googleapis.com/v1beta',
+        'image_model' => env('GEMINI_IMAGE_MODEL', 'gemini-3.1-flash-image'),
+        // tried in order when the model above answers 404 (not available for this key or renamed)
+        'fallback_models' => ['gemini-3.1-flash-image-preview', 'gemini-2.5-flash-image'],
+        'timeout' => (int) env('GEMINI_TIMEOUT', 60),
+    ],
+
 ];
